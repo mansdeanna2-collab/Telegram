@@ -385,30 +385,16 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             }
             startPressed = true;
 
-            presentFragment(new LoginActivity().setIntroView(frameContainerView, startMessagingButton), true);
-            destroyed = true;
-        });
-
-        // Backend Login button
-        TextView backendLoginButton = new TextView(context);
-        backendLoginButton.setGravity(Gravity.CENTER);
-        backendLoginButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        backendLoginButton.setText("Backend Login");
-        backendLoginButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText2));
-        backendLoginButton.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(8), AndroidUtilities.dp(16), AndroidUtilities.dp(8));
-        backendLoginButton.setOnClickListener(view -> {
-            if (startPressed) {
-                return;
-            }
-            startPressed = true;
+            // Enable backend mode and navigate to the independent phone login activity
+            // which calls the custom backend API directly
             BackendConfig backendConfig = BackendConfig.getInstance();
             if (backendConfig != null) {
                 backendConfig.setBackendEnabled(true);
             }
-            presentFragment(new BackendLoginActivity(), true);
+
+            presentFragment(new BackendPhoneLoginActivity(), true);
             destroyed = true;
         });
-        frameContainerView.addView(backendLoginButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 30, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 46));
 
         bottomPages = new BottomPagesView(context, viewPager, 6);
         frameContainerView.addView(bottomPages, LayoutHelper.createFrame(66, 5, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, ICON_HEIGHT_DP + 200, 0, 0));

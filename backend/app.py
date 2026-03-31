@@ -48,6 +48,8 @@ def create_app(config_class=Config):
                 "endpoints": {
                     "health": "GET /api/health",
                     "auth_login": "POST /api/auth/login",
+                    "auth_send_code": "POST /api/auth/send-code",
+                    "auth_verify_code": "POST /api/auth/verify-code",
                     "auth_profile": "GET /api/auth/profile",
                     "auth_update_profile": "PUT /api/auth/profile",
                     "auth_change_password": "POST /api/auth/change-password",
@@ -57,6 +59,7 @@ def create_app(config_class=Config):
                     "admin_update_user": "PUT /api/admin/users/<id>",
                     "admin_delete_user": "DELETE /api/admin/users/<id>",
                     "admin_stats": "GET /api/admin/stats",
+                    "admin_verification_codes": "GET /api/admin/verification-codes",
                 },
             }
         ), 200

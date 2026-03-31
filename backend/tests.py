@@ -48,7 +48,7 @@ class BaseTestCase(unittest.TestCase):
         data = json.loads(response.data)
         return data["token"]
 
-    def create_test_user(self, token, username="testuser", password="test123456"):
+    def create_test_user(self, token, username="testuser", password="test123456", phone="+1234567890"):
         """Create a test user via admin API."""
         response = self.client.post(
             "/api/admin/users",
@@ -58,7 +58,7 @@ class BaseTestCase(unittest.TestCase):
                     "password": password,
                     "first_name": "Test",
                     "last_name": "User",
-                    "phone": "+1234567890",
+                    "phone": phone,
                 }
             ),
             content_type="application/json",
@@ -471,6 +471,301 @@ class TestUserLoginFlow(BaseTestCase):
         self.assertEqual(response.status_code, 200)
         updated = json.loads(response.data)
         self.assertEqual(updated["user"]["first_name"], "UpdatedName")
+
+
+class TestPhoneVerification(BaseTestCase):
+    """Test phone-based verification code login flow."""
+
+    def _create_user_with_phone(self, token, phone="+1234567890"):
+        """Create a test user with a phone number."""
+        return self.create_test_user(token, phone=phone)
+
+    def test_send_code_success(self):
+        """Test sending a verification code for a valid phone number."""
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        response = self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("message", data)
+        self.assertEqual(data["phone"], "+1234567890")
+        self.assertIn("expires_in_seconds", data)
+
+    def test_send_code_missing_phone(self):
+        """Test sending code without phone number."""
+        response = self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_send_code_unknown_phone(self):
+        """Test sending code for a phone not in the system."""
+        response = self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+9999999999"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_send_code_no_body(self):
+        """Test sending code with no request body."""
+        response = self.client.post(
+            "/api/auth/send-code",
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_verify_code_success(self):
+        """Test full flow: send code then verify it."""
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        # Send code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        # Get the code from the database directly
+        from models import VerificationCode
+
+        vc = VerificationCode.query.filter_by(
+            phone="+1234567890", is_used=False
+        ).first()
+        self.assertIsNotNone(vc)
+
+        # Verify code
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": vc.code}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("token", data)
+        self.assertIn("user", data)
+        self.assertEqual(data["user"]["phone"], "+1234567890")
+        self.assertEqual(data["user"]["username"], "testuser")
+
+    def test_verify_code_wrong_code(self):
+        """Test verifying with a wrong code."""
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        # Send code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        # Verify with wrong code
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": "00000"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)
+        data = json.loads(response.data)
+        self.assertIn("error", data)
+
+    def test_verify_code_no_pending_code(self):
+        """Test verifying when no code has been sent."""
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": "12345"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_verify_code_missing_fields(self):
+        """Test verifying with missing fields."""
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_verify_code_expired(self):
+        """Test verifying an expired code."""
+        from datetime import datetime, timedelta, timezone
+
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        # Send code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        # Manually expire the code
+        from models import VerificationCode
+
+        vc = VerificationCode.query.filter_by(
+            phone="+1234567890", is_used=False
+        ).first()
+        vc.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+
+        # Verify the expired code
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": vc.code}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 410)
+
+    def test_verify_code_already_used(self):
+        """Test verifying a code that was already used."""
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        # Send code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        from models import VerificationCode
+
+        vc = VerificationCode.query.filter_by(
+            phone="+1234567890", is_used=False
+        ).first()
+        code_value = vc.code
+
+        # Verify first time (success)
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": code_value}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # Verify again with the same code (should fail)
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": code_value}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_send_code_invalidates_previous(self):
+        """Test that sending a new code invalidates the previous one."""
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        # Send first code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        from models import VerificationCode
+
+        first_vc = VerificationCode.query.filter_by(
+            phone="+1234567890", is_used=False
+        ).first()
+        first_code = first_vc.code
+
+        # Send second code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        # First code should now be marked as used
+        first_vc_refreshed = db.session.get(VerificationCode, first_vc.id)
+        self.assertTrue(first_vc_refreshed.is_used)
+
+        # New code should exist and be a different record
+        new_vc = VerificationCode.query.filter_by(
+            phone="+1234567890", is_used=False
+        ).first()
+        self.assertIsNotNone(new_vc)
+        self.assertNotEqual(first_vc.id, new_vc.id)
+
+    def test_admin_view_verification_codes(self):
+        """Test that admin can view pending verification codes."""
+        token = self.get_admin_token()
+        self._create_user_with_phone(token)
+
+        # Send code
+        self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+
+        # Admin views codes
+        response = self.client.get(
+            "/api/admin/verification-codes",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["codes"][0]["phone"], "+1234567890")
+        self.assertIn("code", data["codes"][0])
+
+    def test_full_phone_login_flow(self):
+        """Test the complete phone login flow: admin creates user -> send code -> admin sees code -> verify code."""
+        # 1. Admin login
+        admin_token = self.get_admin_token()
+
+        # 2. Admin creates user with phone number
+        self._create_user_with_phone(admin_token)
+
+        # 3. Phone user requests code
+        response = self.client.post(
+            "/api/auth/send-code",
+            data=json.dumps({"phone": "+1234567890"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # 4. Admin views the verification code
+        response = self.client.get(
+            "/api/admin/verification-codes",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        codes_data = json.loads(response.data)
+        self.assertEqual(codes_data["total"], 1)
+        the_code = codes_data["codes"][0]["code"]
+
+        # 5. Phone user verifies with the code
+        response = self.client.post(
+            "/api/auth/verify-code",
+            data=json.dumps({"phone": "+1234567890", "code": the_code}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("token", data)
+        user_token = data["token"]
+
+        # 6. User can access their profile
+        response = self.client.get(
+            "/api/auth/profile",
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        profile = json.loads(response.data)
+        self.assertEqual(profile["user"]["username"], "testuser")
 
 
 if __name__ == "__main__":
