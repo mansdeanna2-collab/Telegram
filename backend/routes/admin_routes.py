@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 
 from auth import admin_required
-from models import User, db
+from models import User, VerificationCode, db
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -171,3 +171,24 @@ def get_stats():
             "admin_users": admin_users,
         }
     ), 200
+
+
+@admin_bp.route("/verification-codes", methods=["GET"])
+@admin_required
+def list_verification_codes():
+    """List pending (unused) verification codes.
+
+    This allows admins to view the codes that users need to enter
+    for phone-based login.
+    """
+    codes = (
+        VerificationCode.query.filter_by(is_used=False)
+        .order_by(VerificationCode.created_at.desc())
+        .all()
+    )
+    # Filter out expired codes in Python to avoid timezone issues with SQLite
+    valid_codes = [c for c in codes if c.is_valid()]
+    return jsonify({
+        "codes": [c.to_dict() for c in valid_codes],
+        "total": len(valid_codes),
+    }), 200

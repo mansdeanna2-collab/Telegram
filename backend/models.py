@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 import bcrypt
@@ -8,6 +9,62 @@ db = SQLAlchemy()
 
 def _utcnow():
     return datetime.now(timezone.utc)
+
+
+class VerificationCode(db.Model):
+    """Stores phone verification codes for backend phone login."""
+
+    __tablename__ = "verification_codes"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    phone = db.Column(db.String(20), nullable=False, index=True)
+    code = db.Column(db.String(10), nullable=False)
+    is_used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+
+    @staticmethod
+    def generate(phone, code_length=5, expire_minutes=5):
+        """Generate a new verification code for the given phone number.
+
+        Invalidates any existing unused codes for this phone number first.
+        """
+        # Mark all existing unused codes for this phone as used
+        VerificationCode.query.filter_by(phone=phone, is_used=False).update(
+            {"is_used": True}
+        )
+
+        code = "".join([str(secrets.randbelow(10)) for _ in range(code_length)])
+        vc = VerificationCode(
+            phone=phone,
+            code=code,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=expire_minutes),
+        )
+        db.session.add(vc)
+        db.session.commit()
+        return vc
+
+    def is_valid(self):
+        """Check if the code is still valid (not used, not expired)."""
+        now = datetime.now(timezone.utc)
+        expires = self.expires_at
+        # Ensure both datetimes are timezone-aware for comparison
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return not self.is_used and now < expires
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "phone": self.phone,
+            "code": self.code,
+            "is_used": self.is_used,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+        }
+
+    def __repr__(self):
+        return f"<VerificationCode {self.phone}: {self.code}>"
 
 
 class User(db.Model):
