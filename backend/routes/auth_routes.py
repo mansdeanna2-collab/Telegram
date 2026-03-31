@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 
 from auth import generate_token, token_required
-from models import User
+from models import User, db
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -62,8 +62,6 @@ def update_profile():
     if "avatar_url" in data:
         user.avatar_url = data["avatar_url"].strip()
 
-    from models import db
-
     db.session.commit()
     return jsonify({"user": user.to_dict()}), 200
 
@@ -93,7 +91,5 @@ def change_password():
         return jsonify({"error": "Current password is incorrect"}), 401
 
     user.set_password(new_password)
-    from models import db
-
     db.session.commit()
     return jsonify({"message": "Password changed successfully"}), 200

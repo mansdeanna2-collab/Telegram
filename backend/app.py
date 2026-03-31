@@ -12,6 +12,7 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     # Enable CORS for Android app communication
+    # NOTE: In production, restrict origins to your specific domain instead of "*"
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # Ensure data directory exists
@@ -78,8 +79,13 @@ def _create_default_admin(app):
         db.session.add(admin)
         db.session.commit()
         print(
-            f"Default admin user created: {app.config['ADMIN_USERNAME']} / {app.config['ADMIN_PASSWORD']}"
+            f"Default admin user created: {app.config['ADMIN_USERNAME']}"
         )
+        if not os.environ.get("ADMIN_PASSWORD"):
+            print(
+                "WARNING: Using default admin password. "
+                "Set ADMIN_PASSWORD environment variable for production."
+            )
 
 
 if __name__ == "__main__":

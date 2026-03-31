@@ -21,6 +21,8 @@ public class BackendConfig {
     private static final String KEY_PHONE = "phone";
 
     // Default backend URL (change to your server address)
+    // NOTE: Use HTTPS in production to protect credentials and tokens in transit.
+    // For Android emulator, 10.0.2.2 maps to the host machine's localhost.
     public static final String DEFAULT_BACKEND_URL = "http://10.0.2.2:5000";
 
     private static volatile BackendConfig instance;

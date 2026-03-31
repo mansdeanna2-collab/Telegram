@@ -43,6 +43,9 @@ import org.telegram.ui.Components.LayoutHelper;
 
 public class BackendLoginActivity extends BaseFragment {
 
+    // Offset added to backend user IDs to avoid conflicts with Telegram user IDs
+    private static final long BACKEND_USER_ID_OFFSET = 1000000L;
+
     private EditText serverUrlField;
     private EditText usernameField;
     private EditText passwordField;
@@ -277,14 +280,15 @@ public class BackendLoginActivity extends BaseFragment {
     private void onBackendLoginSuccess(int userId, String firstName, String lastName, String username, String phone) {
         // Create a TLRPC.User to integrate with the existing app framework
         TLRPC.TL_user user = new TLRPC.TL_user();
-        user.id = 1000000L + userId; // Offset to avoid conflicts with real Telegram IDs
+        user.id = BACKEND_USER_ID_OFFSET + userId;
         user.first_name = !TextUtils.isEmpty(firstName) ? firstName : username;
         user.last_name = lastName != null ? lastName : "";
         user.username = username;
         user.phone = phone != null ? phone : "";
         user.status = new TLRPC.TL_userStatusOnline();
         user.status.expires = Integer.MAX_VALUE;
-        user.flags = 1 | 2 | 4; // first_name, last_name, username flags
+        // TLRPC.User flags: 1 = has first_name, 2 = has last_name, 4 = has username
+        user.flags = 1 | 2 | 4;
 
         // Set the user in UserConfig to mark as logged in
         MessagesController.getInstance(currentAccount).cleanup();
