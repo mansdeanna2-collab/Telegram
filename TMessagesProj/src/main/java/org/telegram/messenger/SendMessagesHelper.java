@@ -3825,6 +3825,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     public void sendMessage(SendMessageParams sendMessageParams) {
+        if (BackendMessagesManager.isBackendMode() && sendMessageParams.message != null
+                && !sendMessageParams.message.isEmpty()
+                && BackendMessagesManager.isBackendUserId(sendMessageParams.peer)) {
+            BackendMessagesManager.getInstance(currentAccount).sendMessageToBackend(
+                    sendMessageParams.message, sendMessageParams.peer);
+            return;
+        }
         String message = sendMessageParams.message;
         String caption = sendMessageParams.caption;
         TLRPC.MessageMedia location = sendMessageParams.location;

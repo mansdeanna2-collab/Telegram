@@ -1506,6 +1506,16 @@ public class ContactsController extends BaseController {
     }
 
     public void loadContacts(boolean fromCache, final long hash) {
+        if (BackendMessagesManager.isBackendMode()) {
+            synchronized (loadContactsSync) {
+                loadingContacts = true;
+            }
+            BackendMessagesManager.getInstance(currentAccount).loadContactsFromBackend();
+            synchronized (loadContactsSync) {
+                loadingContacts = false;
+            }
+            return;
+        }
         synchronized (loadContactsSync) {
             loadingContacts = true;
         }

@@ -84,6 +84,55 @@ public class BackendApiClient {
         get("/api/health", null, callback);
     }
 
+    /**
+     * Get list of contacts (other active users).
+     */
+    public static void getContacts(String token, ApiCallback callback) {
+        get("/api/contacts", token, callback);
+    }
+
+    /**
+     * Get list of conversations for the current user.
+     */
+    public static void getConversations(String token, ApiCallback callback) {
+        get("/api/conversations", token, callback);
+    }
+
+    /**
+     * Create or get a conversation with another user.
+     */
+    public static void createConversation(String token, int otherUserId, ApiCallback callback) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("user_id", otherUserId);
+        } catch (JSONException e) {
+            mainHandler.post(() -> callback.onError(-1, "Failed to create request"));
+            return;
+        }
+        post("/api/conversations", body, token, callback);
+    }
+
+    /**
+     * Get messages in a conversation.
+     */
+    public static void getMessages(String token, int conversationId, int page, int perPage, ApiCallback callback) {
+        get("/api/conversations/" + conversationId + "/messages?page=" + page + "&per_page=" + perPage, token, callback);
+    }
+
+    /**
+     * Send a message in a conversation.
+     */
+    public static void sendMessage(String token, int conversationId, String text, ApiCallback callback) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("text", text);
+        } catch (JSONException e) {
+            mainHandler.post(() -> callback.onError(-1, "Failed to create request"));
+            return;
+        }
+        post("/api/conversations/" + conversationId + "/messages", body, token, callback);
+    }
+
     // --- HTTP Methods ---
 
     private static void get(String path, String token, ApiCallback callback) {
