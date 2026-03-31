@@ -97,6 +97,7 @@ import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AutoDeleteMediaTask;
+import org.telegram.messenger.BackendConfig;
 import org.telegram.messenger.BackupAgent;
 import org.telegram.messenger.BetaUpdate;
 import org.telegram.messenger.BirthdayController;
@@ -1055,6 +1056,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private BaseFragment getClientNotActivatedFragment() {
+        // Check if backend login mode is enabled
+        BackendConfig backendConfig = BackendConfig.getInstance();
+        if (backendConfig != null && backendConfig.isBackendEnabled()) {
+            return new BackendLoginActivity();
+        }
         if (LoginActivity.loadCurrentState(false, currentAccount).getInt("currentViewNum", 0) != 0) {
             return new LoginActivity();
         }
