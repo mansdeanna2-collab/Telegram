@@ -205,18 +205,6 @@ public class BackendLoginActivity extends BaseFragment {
         });
         container.addView(switchToTelegramButton, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 0));
 
-        // Switch to Phone login
-        TextView switchToPhoneButton = new TextView(context);
-        switchToPhoneButton.setText("Use Phone Number Login");
-        switchToPhoneButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        switchToPhoneButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText2));
-        switchToPhoneButton.setGravity(Gravity.CENTER);
-        switchToPhoneButton.setPadding(dp(16), dp(8), dp(16), dp(8));
-        switchToPhoneButton.setOnClickListener(v -> {
-            presentFragment(new BackendPhoneLoginActivity(), true);
-        });
-        container.addView(switchToPhoneButton, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 0));
-
         fragmentView = new FrameLayout(context);
         fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
         ((FrameLayout) fragmentView).addView(scrollView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
