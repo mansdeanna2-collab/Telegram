@@ -1,0 +1,60 @@
+###############################################################################
+# Docker Compose — Telegram Android APK Build
+#
+# Usage:
+#   # Build all variants:
+#   docker compose -f docker/docker-compose.build.yml run --rm build-all
+#
+#   # Build standalone APK only:
+#   docker compose -f docker/docker-compose.build.yml run --rm build-standalone
+#
+#   # Build release APK only:
+#   docker compose -f docker/docker-compose.build.yml run --rm build-release
+#
+#   # Build debug APK only:
+#   docker compose -f docker/docker-compose.build.yml run --rm build-debug
+###############################################################################
+
+volumes:
+  gradle-cache:
+    name: telegram-gradle-cache
+
+x-build-base: &build-base
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.build
+  volumes:
+    - ..:/home/source:ro
+    - gradle-cache:/home/gradle-cache
+    - ../build-output:/home/output
+  environment:
+    - GRADLE_OPTS=-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Xmx4096m
+
+services:
+  build-standalone:
+    <<: *build-base
+    command: ["standalone"]
+
+  build-release:
+    <<: *build-base
+    command: ["release"]
+
+  build-huawei:
+    <<: *build-base
+    command: ["huawei"]
+
+  build-bundle:
+    <<: *build-base
+    command: ["bundle"]
+
+  build-bundle23:
+    <<: *build-base
+    command: ["bundle23"]
+
+  build-debug:
+    <<: *build-base
+    command: ["debug"]
+
+  build-all:
+    <<: *build-base
+    command: ["all"]
