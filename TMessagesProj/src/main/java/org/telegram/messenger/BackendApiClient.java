@@ -49,6 +49,37 @@ public class BackendApiClient {
     }
 
     /**
+     * Send a verification code to the backend for phone-based login.
+     * The code is generated server-side and visible to admins in the backend.
+     */
+    public static void sendCode(String phone, ApiCallback callback) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("phone", phone);
+        } catch (JSONException e) {
+            mainHandler.post(() -> callback.onError(-1, "Failed to create request"));
+            return;
+        }
+        post("/api/auth/send-code", body, null, callback);
+    }
+
+    /**
+     * Verify a phone verification code and login.
+     * Returns JWT token and user profile on success.
+     */
+    public static void verifyCode(String phone, String code, ApiCallback callback) {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("phone", phone);
+            body.put("code", code);
+        } catch (JSONException e) {
+            mainHandler.post(() -> callback.onError(-1, "Failed to create request"));
+            return;
+        }
+        post("/api/auth/verify-code", body, null, callback);
+    }
+
+    /**
      * Get current user profile.
      */
     public static void getProfile(String token, ApiCallback callback) {
