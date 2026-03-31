@@ -396,11 +396,12 @@ public class BackendPhoneLoginActivity extends BaseFragment {
     }
 
     @Override
-    public void onBackPressed() {
+    public boolean onBackPressed(boolean invoked) {
         if (currentStep == STEP_CODE) {
             showPhoneStep();
+            return false;
         } else {
-            super.onBackPressed();
+            return super.onBackPressed(invoked);
         }
     }
 }
