@@ -55,6 +55,7 @@ import androidx.viewpager.widget.ViewPager;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BackendConfig;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.DispatchQueue;
 import org.telegram.messenger.EmuDetector;
@@ -387,6 +388,27 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             presentFragment(new LoginActivity().setIntroView(frameContainerView, startMessagingButton), true);
             destroyed = true;
         });
+
+        // Backend Login button
+        TextView backendLoginButton = new TextView(context);
+        backendLoginButton.setGravity(Gravity.CENTER);
+        backendLoginButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        backendLoginButton.setText("Backend Login");
+        backendLoginButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText2));
+        backendLoginButton.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(8), AndroidUtilities.dp(16), AndroidUtilities.dp(8));
+        backendLoginButton.setOnClickListener(view -> {
+            if (startPressed) {
+                return;
+            }
+            startPressed = true;
+            BackendConfig backendConfig = BackendConfig.getInstance();
+            if (backendConfig != null) {
+                backendConfig.setBackendEnabled(true);
+            }
+            presentFragment(new BackendLoginActivity(), true);
+            destroyed = true;
+        });
+        frameContainerView.addView(backendLoginButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 30, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 46));
 
         bottomPages = new BottomPagesView(context, viewPager, 6);
         frameContainerView.addView(bottomPages, LayoutHelper.createFrame(66, 5, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, ICON_HEIGHT_DP + 200, 0, 0));
