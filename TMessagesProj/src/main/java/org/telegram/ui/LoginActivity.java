@@ -263,6 +263,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             COUNTRY_STATE_EMPTY = 1,
             COUNTRY_STATE_INVALID = 2;
 
+    // Backend phone login constants
+    private static final long BACKEND_USER_ID_OFFSET = 1000000L;
+    private static final String BACKEND_PHONE_HASH = "backend";
+    private static final int BACKEND_CODE_LENGTH = 5;
+
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
             AUTH_TYPE_MESSAGE,
@@ -1651,8 +1656,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
      * Creates a synthetic TLRPC.TL_user and sets up the app as authenticated.
      */
     private void onBackendAuthSuccess(int userId, String firstName, String lastName, String username, String phone) {
-        final long BACKEND_USER_ID_OFFSET = 1000000L;
-
         TLRPC.TL_user user = new TLRPC.TL_user();
         user.id = BACKEND_USER_ID_OFFSET + userId;
         user.first_name = !android.text.TextUtils.isEmpty(firstName) ? firstName : username;
@@ -3198,9 +3201,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                         nextPressed = false;
                         needHideProgress(false);
                         // Navigate to SMS code view with backend flag
-                        params.putString("phoneHash", "backend");
+                        params.putString("phoneHash", BACKEND_PHONE_HASH);
                         params.putInt("type", AUTH_TYPE_SMS);
-                        params.putInt("length", 5);
+                        params.putInt("length", BACKEND_CODE_LENGTH);
                         params.putInt("nextType", 0);
                         params.putInt("timeout", 300000);
                         params.putBoolean("backendMode", true);
