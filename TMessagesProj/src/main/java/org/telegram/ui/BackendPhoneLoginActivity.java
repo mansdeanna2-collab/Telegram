@@ -45,6 +45,7 @@ public class BackendPhoneLoginActivity extends BaseFragment {
     private static final int STEP_PHONE = 0;
     private static final int STEP_CODE = 1;
 
+    // Offset added to backend user IDs to avoid conflicts with Telegram user IDs
     private static final long BACKEND_USER_ID_OFFSET = 1000000L;
     private static final int CODE_LENGTH = 5;
 
