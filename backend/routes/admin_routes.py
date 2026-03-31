@@ -86,7 +86,7 @@ def create_user():
 @admin_required
 def get_user(user_id):
     """Get user details by ID."""
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if user is None:
         return jsonify({"error": "User not found"}), 404
     return jsonify({"user": user.to_dict()}), 200
@@ -100,7 +100,7 @@ def update_user(user_id):
     Allows updating: username, first_name, last_name, phone, avatar_url,
                      is_admin, is_active, password
     """
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
@@ -144,7 +144,7 @@ def update_user(user_id):
 @admin_required
 def delete_user(user_id):
     """Delete a user by ID."""
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if user is None:
         return jsonify({"error": "User not found"}), 404
 

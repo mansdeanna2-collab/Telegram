@@ -4,7 +4,7 @@ from functools import wraps
 import jwt
 from flask import current_app, request, jsonify
 
-from models import User
+from models import User, db
 
 
 def generate_token(user):
@@ -50,7 +50,7 @@ def token_required(f):
         if payload is None:
             return jsonify({"error": "Token is invalid or expired"}), 401
 
-        user = User.query.get(payload["user_id"])
+        user = db.session.get(User, payload["user_id"])
         if user is None:
             return jsonify({"error": "User not found"}), 401
 

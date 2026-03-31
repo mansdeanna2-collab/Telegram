@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 import bcrypt
 
 db = SQLAlchemy()
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class User(db.Model):
@@ -18,10 +22,8 @@ class User(db.Model):
     avatar_url = db.Column(db.String(256), nullable=True, default="")
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    created_at = db.Column(db.DateTime, default=_utcnow)
+    updated_at = db.Column(db.DateTime, default=_utcnow, onupdate=_utcnow)
 
     def set_password(self, password):
         self.password_hash = bcrypt.hashpw(
