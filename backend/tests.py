@@ -473,5 +473,364 @@ class TestUserLoginFlow(BaseTestCase):
         self.assertEqual(updated["user"]["first_name"], "UpdatedName")
 
 
+class TestContacts(BaseTestCase):
+    """Test contacts endpoint."""
+
+    def test_list_contacts_empty(self):
+        """Admin is the only user, contacts should be empty."""
+        token = self.get_admin_token()
+        response = self.client.get(
+            "/api/contacts", headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(len(data["contacts"]), 0)
+
+    def test_list_contacts_with_users(self):
+        token = self.get_admin_token()
+        self.create_test_user(token, "alice", "password123")
+        self.create_test_user(token, "bob", "password123")
+
+        # Login as alice
+        resp = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "password123"}),
+            content_type="application/json",
+        )
+        alice_token = json.loads(resp.data)["token"]
+
+        response = self.client.get(
+            "/api/contacts", headers={"Authorization": f"Bearer {alice_token}"}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        # Alice should see admin and bob but not herself
+        self.assertEqual(len(data["contacts"]), 2)
+        usernames = [c["username"] for c in data["contacts"]]
+        self.assertNotIn("alice", usernames)
+        self.assertIn("bob", usernames)
+        self.assertIn("admin", usernames)
+
+    def test_list_contacts_no_token(self):
+        response = self.client.get("/api/contacts")
+        self.assertEqual(response.status_code, 401)
+
+
+class TestConversations(BaseTestCase):
+    """Test conversation endpoints."""
+
+    def _setup_two_users(self):
+        admin_token = self.get_admin_token()
+        self.create_test_user(admin_token, "alice", "password123")
+        self.create_test_user(admin_token, "bob", "password123")
+
+        resp = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "password123"}),
+            content_type="application/json",
+        )
+        alice_token = json.loads(resp.data)["token"]
+
+        resp = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "bob", "password": "password123"}),
+            content_type="application/json",
+        )
+        bob_token = json.loads(resp.data)["token"]
+        return alice_token, bob_token
+
+    def test_create_conversation(self):
+        alice_token, bob_token = self._setup_two_users()
+        # Alice creates conversation with Bob (user id 3)
+        response = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 3}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn("conversation", data)
+        self.assertIsNotNone(data["conversation"]["id"])
+
+    def test_create_conversation_with_self(self):
+        alice_token, _ = self._setup_two_users()
+        response = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 2}),  # alice's own id
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_conversation_nonexistent_user(self):
+        alice_token, _ = self._setup_two_users()
+        response = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 999}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_create_conversation_idempotent(self):
+        """Creating the same conversation twice returns the same one."""
+        alice_token, _ = self._setup_two_users()
+        r1 = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 3}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        r2 = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 3}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        d1 = json.loads(r1.data)["conversation"]["id"]
+        d2 = json.loads(r2.data)["conversation"]["id"]
+        self.assertEqual(d1, d2)
+
+    def test_list_conversations_empty(self):
+        alice_token, _ = self._setup_two_users()
+        response = self.client.get(
+            "/api/conversations",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(len(data["conversations"]), 0)
+
+    def test_list_conversations_with_messages(self):
+        alice_token, bob_token = self._setup_two_users()
+        # Create conversation
+        resp = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 3}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        conv_id = json.loads(resp.data)["conversation"]["id"]
+
+        # Send a message
+        self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "Hello Bob!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+
+        # Both users should see the conversation
+        for token in [alice_token, bob_token]:
+            response = self.client.get(
+                "/api/conversations",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(response.status_code, 200)
+            data = json.loads(response.data)
+            self.assertEqual(len(data["conversations"]), 1)
+            self.assertIsNotNone(data["conversations"][0]["last_message"])
+
+
+class TestMessages(BaseTestCase):
+    """Test message endpoints."""
+
+    def _setup_conversation(self):
+        admin_token = self.get_admin_token()
+        self.create_test_user(admin_token, "alice", "password123")
+        self.create_test_user(admin_token, "bob", "password123")
+
+        resp = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "alice", "password": "password123"}),
+            content_type="application/json",
+        )
+        alice_token = json.loads(resp.data)["token"]
+
+        resp = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "bob", "password": "password123"}),
+            content_type="application/json",
+        )
+        bob_token = json.loads(resp.data)["token"]
+
+        resp = self.client.post(
+            "/api/conversations",
+            data=json.dumps({"user_id": 3}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        conv_id = json.loads(resp.data)["conversation"]["id"]
+        return alice_token, bob_token, conv_id
+
+    def test_send_message(self):
+        alice_token, _, conv_id = self._setup_conversation()
+        response = self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "Hello!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 201)
+        data = json.loads(response.data)
+        self.assertEqual(data["message"]["text"], "Hello!")
+
+    def test_send_empty_message(self):
+        alice_token, _, conv_id = self._setup_conversation()
+        response = self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": ""}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_send_message_whitespace_only(self):
+        alice_token, _, conv_id = self._setup_conversation()
+        response = self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "   "}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_list_messages(self):
+        alice_token, bob_token, conv_id = self._setup_conversation()
+        # Send messages from both users
+        self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "Hi Bob!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "Hi Alice!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+
+        # List messages
+        response = self.client.get(
+            f"/api/conversations/{conv_id}/messages",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(len(data["messages"]), 2)
+        self.assertEqual(data["messages"][0]["text"], "Hi Bob!")
+        self.assertEqual(data["messages"][1]["text"], "Hi Alice!")
+
+    def test_list_messages_marks_as_read(self):
+        alice_token, bob_token, conv_id = self._setup_conversation()
+        # Alice sends a message
+        self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "Hello!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+
+        # Bob reads the messages
+        self.client.get(
+            f"/api/conversations/{conv_id}/messages",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+
+        # Check unread count for Bob is now 0
+        response = self.client.get(
+            "/api/conversations",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        data = json.loads(response.data)
+        self.assertEqual(data["conversations"][0]["unread_count"], 0)
+
+    def test_access_denied_other_conversation(self):
+        alice_token, bob_token, conv_id = self._setup_conversation()
+        # Create another user
+        admin_token = self.get_admin_token()
+        self.create_test_user(admin_token, "charlie", "password123")
+        resp = self.client.post(
+            "/api/auth/login",
+            data=json.dumps({"username": "charlie", "password": "password123"}),
+            content_type="application/json",
+        )
+        charlie_token = json.loads(resp.data)["token"]
+
+        # Charlie tries to access alice-bob conversation
+        response = self.client.get(
+            f"/api/conversations/{conv_id}/messages",
+            headers={"Authorization": f"Bearer {charlie_token}"},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_message_in_nonexistent_conversation(self):
+        alice_token, _, _ = self._setup_conversation()
+        response = self.client.post(
+            "/api/conversations/999/messages",
+            data=json.dumps({"text": "Hello!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_full_messaging_flow(self):
+        """Test complete flow: create users -> create conv -> exchange messages."""
+        alice_token, bob_token, conv_id = self._setup_conversation()
+
+        # Alice sends 3 messages
+        for text in ["Hello!", "How are you?", "Want to meet?"]:
+            self.client.post(
+                f"/api/conversations/{conv_id}/messages",
+                data=json.dumps({"text": text}),
+                content_type="application/json",
+                headers={"Authorization": f"Bearer {alice_token}"},
+            )
+
+        # Bob checks unread count
+        response = self.client.get(
+            "/api/conversations",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        data = json.loads(response.data)
+        self.assertEqual(data["conversations"][0]["unread_count"], 3)
+
+        # Bob reads messages
+        response = self.client.get(
+            f"/api/conversations/{conv_id}/messages",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        data = json.loads(response.data)
+        self.assertEqual(data["total"], 3)
+
+        # Bob's unread count should be 0 now
+        response = self.client.get(
+            "/api/conversations",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        data = json.loads(response.data)
+        self.assertEqual(data["conversations"][0]["unread_count"], 0)
+
+        # Bob replies
+        self.client.post(
+            f"/api/conversations/{conv_id}/messages",
+            data=json.dumps({"text": "Sure!"}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+
+        # Alice checks - should have 1 unread from bob
+        response = self.client.get(
+            "/api/conversations",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        data = json.loads(response.data)
+        self.assertEqual(data["conversations"][0]["unread_count"], 1)
+        self.assertEqual(data["conversations"][0]["last_message"]["text"], "Sure!")
+
+
 if __name__ == "__main__":
     unittest.main()

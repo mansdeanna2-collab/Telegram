@@ -29,9 +29,11 @@ def create_app(config_class=Config):
     # Register blueprints
     from routes.auth_routes import auth_bp
     from routes.admin_routes import admin_bp
+    from routes.messaging_routes import messaging_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(messaging_bp)
 
     # Health check endpoint
     @app.route("/api/health", methods=["GET"])
@@ -57,6 +59,11 @@ def create_app(config_class=Config):
                     "admin_update_user": "PUT /api/admin/users/<id>",
                     "admin_delete_user": "DELETE /api/admin/users/<id>",
                     "admin_stats": "GET /api/admin/stats",
+                    "contacts": "GET /api/contacts",
+                    "conversations_list": "GET /api/conversations",
+                    "conversations_create": "POST /api/conversations",
+                    "messages_list": "GET /api/conversations/<id>/messages",
+                    "messages_send": "POST /api/conversations/<id>/messages",
                 },
             }
         ), 200
