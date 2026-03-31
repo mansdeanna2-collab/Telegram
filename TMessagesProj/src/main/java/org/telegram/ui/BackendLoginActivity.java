@@ -23,13 +23,11 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.json.JSONObject;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BackendApiClient;
 import org.telegram.messenger.BackendConfig;
-import org.telegram.messenger.ConnectionsManager;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
@@ -300,8 +298,9 @@ public class BackendLoginActivity extends BaseFragment {
         MessagesController.getInstance(currentAccount).putUser(user, false);
         MessagesStorage.getInstance(currentAccount).putUsersAndChats(java.util.Collections.singletonList(user), null, false, true);
 
-        // Navigate to main screen
-        presentFragment(new DialogsActivity(null), true);
+        // Navigate to main screen using MainTabsActivity (same as normal Telegram login flow)
+        MainTabsActivity mainTabsActivity = new MainTabsActivity();
+        presentFragment(mainTabsActivity, true);
     }
 
     private void setLoading(boolean loading) {

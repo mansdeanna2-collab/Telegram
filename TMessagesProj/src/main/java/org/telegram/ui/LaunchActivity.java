@@ -1059,10 +1059,6 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         // Check if backend login mode is enabled
         BackendConfig backendConfig = BackendConfig.getInstance();
         if (backendConfig != null && backendConfig.isBackendEnabled()) {
-            if (backendConfig.isLoggedIn()) {
-                // Already logged in via backend, proceed to main screen
-                return null;
-            }
             return new BackendLoginActivity();
         }
         if (LoginActivity.loadCurrentState(false, currentAccount).getInt("currentViewNum", 0) != 0) {
