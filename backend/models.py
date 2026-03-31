@@ -23,8 +23,10 @@ class VerificationCode(db.Model):
     created_at = db.Column(db.DateTime, default=_utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
 
+    CODE_EXPIRE_MINUTES = 5
+
     @staticmethod
-    def generate(phone, code_length=5, expire_minutes=5):
+    def generate(phone, code_length=5):
         """Generate a new verification code for the given phone number.
 
         Invalidates any existing unused codes for this phone number first.
@@ -38,7 +40,7 @@ class VerificationCode(db.Model):
         vc = VerificationCode(
             phone=phone,
             code=code,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=expire_minutes),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=VerificationCode.CODE_EXPIRE_MINUTES),
         )
         db.session.add(vc)
         db.session.commit()

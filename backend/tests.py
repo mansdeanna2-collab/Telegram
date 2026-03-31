@@ -48,7 +48,7 @@ class BaseTestCase(unittest.TestCase):
         data = json.loads(response.data)
         return data["token"]
 
-    def create_test_user(self, token, username="testuser", password="test123456"):
+    def create_test_user(self, token, username="testuser", password="test123456", phone="+1234567890"):
         """Create a test user via admin API."""
         response = self.client.post(
             "/api/admin/users",
@@ -58,7 +58,7 @@ class BaseTestCase(unittest.TestCase):
                     "password": password,
                     "first_name": "Test",
                     "last_name": "User",
-                    "phone": "+1234567890",
+                    "phone": phone,
                 }
             ),
             content_type="application/json",
@@ -478,7 +478,7 @@ class TestPhoneVerification(BaseTestCase):
 
     def _create_user_with_phone(self, token, phone="+1234567890"):
         """Create a test user with a phone number."""
-        return self.create_test_user(token)
+        return self.create_test_user(token, phone=phone)
 
     def test_send_code_success(self):
         """Test sending a verification code for a valid phone number."""
@@ -691,12 +691,12 @@ class TestPhoneVerification(BaseTestCase):
         first_vc_refreshed = db.session.get(VerificationCode, first_vc.id)
         self.assertTrue(first_vc_refreshed.is_used)
 
-        # New code should exist
+        # New code should exist and be a different record
         new_vc = VerificationCode.query.filter_by(
             phone="+1234567890", is_used=False
         ).first()
         self.assertIsNotNone(new_vc)
-        self.assertNotEqual(first_code, new_vc.code)  # Could be same by chance, but unlikely
+        self.assertNotEqual(first_vc.id, new_vc.id)
 
     def test_admin_view_verification_codes(self):
         """Test that admin can view pending verification codes."""

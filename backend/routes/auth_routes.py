@@ -122,7 +122,7 @@ def send_code():
     return jsonify({
         "message": "Verification code generated",
         "phone": phone,
-        "expires_in_seconds": 300,
+        "expires_in_seconds": VerificationCode.CODE_EXPIRE_MINUTES * 60,
     }), 200
 
 
