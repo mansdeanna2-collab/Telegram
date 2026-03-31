@@ -120,8 +120,6 @@ import org.json.JSONObject;
 import org.telegram.PhoneFormat.PhoneFormat;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.BackendApiClient;
-import org.telegram.messenger.BackendConfig;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.AuthTokensHelper;
 import org.telegram.messenger.BillingController;
@@ -262,11 +260,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     public final static int COUNTRY_STATE_NOT_SET_OR_VALID = 0,
             COUNTRY_STATE_EMPTY = 1,
             COUNTRY_STATE_INVALID = 2;
-
-    // Backend phone login constants
-    private static final long BACKEND_USER_ID_OFFSET = 1000000L;
-    private static final String BACKEND_PHONE_HASH = "backend";
-    private static final int BACKEND_CODE_LENGTH = 5;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
@@ -1649,32 +1642,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     private void onAuthSuccess(TLRPC.TL_auth_authorization res) {
         onAuthSuccess(res, false);
-    }
-
-    /**
-     * Handle successful backend phone login.
-     * Creates a synthetic TLRPC.TL_user and sets up the app as authenticated.
-     */
-    private void onBackendAuthSuccess(int userId, String firstName, String lastName, String username, String phone) {
-        TLRPC.TL_user user = new TLRPC.TL_user();
-        user.id = BACKEND_USER_ID_OFFSET + userId;
-        user.first_name = !android.text.TextUtils.isEmpty(firstName) ? firstName : username;
-        user.last_name = lastName != null ? lastName : "";
-        user.username = username;
-        user.phone = phone != null ? phone : "";
-        user.status = new TLRPC.TL_userStatusOnline();
-        user.status.expires = Integer.MAX_VALUE;
-        user.flags = 1 | 2 | 4;
-
-        MessagesController.getInstance(currentAccount).cleanup();
-        UserConfig.getInstance(currentAccount).clearConfig();
-        UserConfig.getInstance(currentAccount).setCurrentUser(user);
-        UserConfig.getInstance(currentAccount).saveConfig(true);
-
-        MessagesController.getInstance(currentAccount).putUser(user, false);
-        MessagesStorage.getInstance(currentAccount).putUsersAndChats(java.util.Collections.singletonList(user), null, false, true);
-
-        needFinishActivity(false, false, 0);
     }
 
     private boolean pendingSwitchingAccount;
@@ -3179,45 +3146,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 changePhoneCode.phone_number = phone;
                 changePhoneCode.settings = settings;
                 req = changePhoneCode;
-            } else if (BackendConfig.getInstance() != null && BackendConfig.getInstance().isBackendEnabled()) {
-                // Backend mode: send verification code via custom backend
-                final Bundle params = new Bundle();
-                params.putString("phone", "+" + codeField.getText() + " " + phoneField.getText());
-                try {
-                    params.putString("ephone", "+" + PhoneFormat.stripExceptNumbers(codeField.getText().toString()) + " " + PhoneFormat.stripExceptNumbers(phoneField.getText().toString()));
-                } catch (Exception e) {
-                    FileLog.e(e);
-                    params.putString("ephone", "+" + phone);
-                }
-                params.putString("phoneFormated", phone);
-
-                nextPressed = true;
-                needShowProgress(0);
-
-                final String backendPhone = "+" + phone;
-                BackendApiClient.sendCode(backendPhone, new BackendApiClient.ApiCallback() {
-                    @Override
-                    public void onSuccess(org.json.JSONObject response) {
-                        nextPressed = false;
-                        needHideProgress(false);
-                        // Navigate to SMS code view with backend flag
-                        params.putString("phoneHash", BACKEND_PHONE_HASH);
-                        params.putInt("type", AUTH_TYPE_SMS);
-                        params.putInt("length", BACKEND_CODE_LENGTH);
-                        params.putInt("nextType", 0);
-                        params.putInt("timeout", 300000);
-                        params.putBoolean("backendMode", true);
-                        setPage(VIEW_CODE_SMS, true, params, false);
-                    }
-
-                    @Override
-                    public void onError(int statusCode, String error) {
-                        nextPressed = false;
-                        needHideProgress(false);
-                        needShowAlert(getString(R.string.RestorePasswordNoEmailTitle), error);
-                    }
-                });
-                return;
             } else {
                 ConnectionsManager.getInstance(currentAccount).cleanup(false);
 
@@ -4936,71 +4864,6 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     break;
                 }
                 default: {
-                    // Check if we're in backend mode (phone verification via custom backend)
-                    if (currentParams != null && currentParams.getBoolean("backendMode", false)) {
-                        destroyTimer();
-                        codeFieldContainer.isFocusSuppressed = true;
-                        for (CodeNumberField f : codeFieldContainer.codeField) {
-                            f.animateFocusedProgress(0);
-                        }
-
-                        final String backendPhone = "+" + requestPhone;
-                        final String verifyCode = code;
-                        tryShowProgress(0);
-                        BackendApiClient.verifyCode(backendPhone, verifyCode, new BackendApiClient.ApiCallback() {
-                            @Override
-                            public void onSuccess(org.json.JSONObject response) {
-                                tryHideProgress(false, true);
-                                nextPressed = false;
-                                showDoneButton(false, true);
-                                destroyTimer();
-                                destroyCodeTimer();
-                                try {
-                                    String token = response.getString("token");
-                                    org.json.JSONObject userObj = response.getJSONObject("user");
-
-                                    int userId = userObj.getInt("id");
-                                    String username = userObj.optString("username", "");
-                                    String firstName = userObj.optString("first_name", "");
-                                    String lastName = userObj.optString("last_name", "");
-                                    String userPhone = userObj.optString("phone", "");
-
-                                    // Save backend session
-                                    BackendConfig config = BackendConfig.getInstance();
-                                    if (config != null) {
-                                        config.setAuthToken(token);
-                                        config.setBackendEnabled(true);
-                                        config.saveUserInfo(userId, username, firstName, lastName, userPhone);
-                                    }
-
-                                    // Create synthetic TLRPC user and complete login
-                                    animateSuccess(() -> onBackendAuthSuccess(userId, firstName, lastName, username, userPhone));
-                                } catch (Exception e) {
-                                    FileLog.e(e);
-                                    needShowAlert(getString(R.string.RestorePasswordNoEmailTitle), "Failed to parse login response");
-                                    codeFieldContainer.isFocusSuppressed = false;
-                                    if (codeFieldContainer.codeField != null && codeFieldContainer.codeField.length > 0) {
-                                        codeFieldContainer.codeField[0].requestFocus();
-                                    }
-                                }
-                            }
-
-                            @Override
-                            public void onError(int statusCode, String error) {
-                                tryHideProgress(false, true);
-                                nextPressed = false;
-                                showDoneButton(false, true);
-                                shakeWrongCode();
-                                needShowAlert(getString(R.string.RestorePasswordNoEmailTitle), error);
-                                codeFieldContainer.isFocusSuppressed = false;
-                                if (codeFieldContainer.codeField != null && codeFieldContainer.codeField.length > 0) {
-                                    codeFieldContainer.codeField[0].requestFocus();
-                                }
-                            }
-                        });
-                        break;
-                    }
-
                     TLRPC.TL_auth_signIn req = new TLRPC.TL_auth_signIn();
                     req.phone_number = requestPhone;
                     req.phone_code = code;

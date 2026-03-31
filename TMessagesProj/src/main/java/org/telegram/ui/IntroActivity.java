@@ -385,14 +385,14 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             }
             startPressed = true;
 
-            // Enable backend mode transparently - the standard phone login flow
-            // will use the custom backend for verification codes
+            // Enable backend mode and navigate to the independent phone login activity
+            // which calls the custom backend API directly
             BackendConfig backendConfig = BackendConfig.getInstance();
             if (backendConfig != null) {
                 backendConfig.setBackendEnabled(true);
             }
 
-            presentFragment(new LoginActivity().setIntroView(frameContainerView, startMessagingButton), true);
+            presentFragment(new BackendPhoneLoginActivity(), true);
             destroyed = true;
         });
 
