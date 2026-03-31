@@ -7,6 +7,8 @@ from models import db, User, Conversation, Message
 
 messaging_bp = Blueprint("messaging", __name__, url_prefix="/api")
 
+MAX_MESSAGE_LENGTH = 4096
+
 
 def _get_or_create_conversation(user1_id, user2_id):
     """Get existing conversation or create a new one.
@@ -142,8 +144,8 @@ def send_message(conversation_id):
         return jsonify({"error": "Message text is required"}), 400
 
     text = data["text"].strip()
-    if len(text) > 4096:
-        return jsonify({"error": "Message too long (max 4096 characters)"}), 400
+    if len(text) > MAX_MESSAGE_LENGTH:
+        return jsonify({"error": f"Message too long (max {MAX_MESSAGE_LENGTH} characters)"}), 400
 
     msg = Message(
         conversation_id=conversation_id,
@@ -151,6 +153,9 @@ def send_message(conversation_id):
         text=text,
     )
     db.session.add(msg)
+    # Explicitly update conversation timestamp since onupdate only triggers
+    # when the Conversation row's own columns are modified via ORM, not
+    # when a child Message is added.
     conv.updated_at = db.func.now()
     db.session.commit()
 

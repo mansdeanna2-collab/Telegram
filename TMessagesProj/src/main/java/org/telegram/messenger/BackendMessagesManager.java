@@ -689,6 +689,7 @@ public class BackendMessagesManager extends BaseController {
 
     /**
      * Parse ISO 8601 date string to Unix timestamp.
+     * A new SimpleDateFormat instance is created per call to ensure thread safety.
      */
     private int parseDate(String isoDate) {
         if (isoDate == null || isoDate.isEmpty()) {
